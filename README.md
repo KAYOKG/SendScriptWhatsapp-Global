@@ -1,0 +1,1 @@
+# SendScriptWhatsapp-Global
