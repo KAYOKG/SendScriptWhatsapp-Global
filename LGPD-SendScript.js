@@ -1,22 +1,43 @@
 async function enviarScript(scriptText) {
   const lines = scriptText.split(/[\n\t]+/).map(line => line.trim()).filter(line => line);
-  main = document.querySelector("#main"),
-    textarea = main.querySelector(`div[contenteditable="true"]`)
+  
+  const main = document.querySelector("#main");
+  const textarea = main?.querySelector('div[contenteditable="true"]');
+  
+  if (!textarea) throw new Error("Não há uma conversa aberta");
 
-  if (!textarea) throw new Error("Não há uma conversa aberta")
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    console.log(`Enviando: ${line}`);
 
-  for (const line of lines) {
-    console.log(line)
-
+    // Foca e insere o texto
     textarea.focus();
     document.execCommand('insertText', false, line);
-    textarea.dispatchEvent(new Event('change', { bubbles: true }));
 
-    setTimeout(() => {
-      (main.querySelector(`[data-testid="send"]`) || main.querySelector(`[data-icon="send"]`)).click();
-    }, 100);
+    // Aguarda um momento para o botão de envio aparecer
+    await new Promise(resolve => setTimeout(resolve, 300));
 
-    if (lines.indexOf(line) !== lines.length - 1) await new Promise(resolve => setTimeout(resolve, 250));
+    // Tenta clicar no botão de envio
+    const sendBtn = main.querySelector('[data-testid="send"]') || main.querySelector('[data-icon="send"]');
+    
+    if (sendBtn) {
+      sendBtn.click();
+    } else {
+      // Fallback: simula o Enter no textarea
+      textarea.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        which: 13,
+        bubbles: true,
+        cancelable: true,
+      }));
+    }
+
+    // Intervalo entre mensagens
+    if (i < lines.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
   }
 
   return lines.length;
@@ -1410,4 +1431,4 @@ Raul Jungmann
 Eliseu Padilha
 
 Este texto não substitui o publicado no DOU de 15.8.2018, e republicado parcialmente em 15.8.2018 - Edição extra
-`).then(e => console.log(`Código finalizado, ${e} mensagens enviadas`)).catch(console.error)
+`).then(e => console.log(`Código finalizado, ${e} mensagens enviadas`)).catch(console.error);
