@@ -16,43 +16,57 @@ No WhatsApp Web abra o console do Browser
 
 Pronto!
 
+Para **parar no meio**, digite `pararScript = true` no console e aperte Enter.
+
 > **OBS:** em alguns navegadores o console pode estar bloqueado, para isso você pode escrever no console `allow pasting` ou `allow-scripts` e apertar Enter, depois cole o código do script.
 
-#Script padrão
-```
+## Script padrão
+
+Use para mandar qualquer texto: troque `Cole a mensagem aqui` pelo seu texto (uma mensagem por linha).
+
+```js
+// Motor do SendScript (atualizado em 11/2026 para o WhatsApp Web atual).
+// Uso: abra uma conversa no WhatsApp Web, cole o arquivo inteiro no console e aperte Enter.
+// Para parar no meio: digite  pararScript = true  no console e aperte Enter.
 async function enviarScript(scriptText) {
-  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-  const lines = scriptText.split(/\n+/).map(line => line.trim()).filter(line => line);
+  const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+  const linhas = scriptText.split(/[
+	]+/).map((l) => l.trim()).filter(Boolean);
   const main = document.querySelector("#main");
-  const textarea = main?.querySelector(`div[contenteditable="true"]`);
+  // a caixa de mensagem fica no rodape da conversa; o seletor amplo cobre versoes antigas
+  const caixa = main?.querySelector('footer div[contenteditable="true"]') || main?.querySelector('div[contenteditable="true"]');
+  if (!caixa) throw new Error("Abra uma conversa no WhatsApp Web antes de rodar o script.");
 
-  if (!main || !textarea) throw new Error("Conversa não encontrada. Abra um chat no WhatsApp Web primeiro.");
+  // o WhatsApp troca o nome do botao de enviar de tempos em tempos: tenta todos os conhecidos
+  const botaoEnviar = () =>
+    main.querySelector('button[aria-label="Enviar"], button[aria-label="Send"]') ||
+    ['wds-ic-send-filled', 'send'].map((i) => main.querySelector(`span[data-icon="${i}"]`)?.closest("button, [role=button]")).find(Boolean) ||
+    main.querySelector('[data-testid="send"]');
 
-  for (const line of lines) {
-    // Foca no campo de mensagem e simula "colar" o texto
-    textarea.focus();
-    const dt = new DataTransfer();
-    dt.setData("text", line);
-    const pasteEvent = new ClipboardEvent("paste", {
-      clipboardData: dt,
-      bubbles: true
-    });
-    textarea.dispatchEvent(pasteEvent);
+  window.pararScript = false;
+  let enviadas = 0;
+  for (const linha of linhas) {
+    if (window.pararScript) { console.warn(`Parado pelo usuario apos ${enviadas} mensagens.`); break; }
+    caixa.focus();
+    // colar funciona no editor novo do WhatsApp; insertText cobre o antigo
+    const dados = new DataTransfer();
+    dados.setData("text/plain", linha);
+    caixa.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dados, bubbles: true, cancelable: true }));
+    if (!caixa.textContent.trim()) document.execCommand("insertText", false, linha);
+    await espera(150);
 
-    await delay(200);
+    const botao = botaoEnviar();
+    if (botao) botao.click();
+    else caixa.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true }));
 
-    // Novo seletor atualizado para botão de envio
-    const sendButton = main.querySelector(`button span[data-icon="wds-ic-send-filled"]`)?.closest("button");
-
-    if (!sendButton) throw new Error("❌ Botão de envio não encontrado. Verifique se a mensagem foi preenchida.");
-    sendButton.click();
-
-    await delay(800); // aguarda antes de enviar o próximo
+    // espera a caixa esvaziar (mensagem enviada) antes da proxima, ate 3 s
+    for (let t = 0; t < 30 && caixa.textContent.trim(); t++) await espera(100);
+    if (caixa.textContent.trim()) throw new Error(`Nao consegui enviar: "${linha.slice(0, 40)}". O WhatsApp mudou de novo? Abra uma issue.`);
+    enviadas++;
+    await espera(250);
   }
-
-  return lines.length;
+  return enviadas;
 }
 
-// Exemplo de uso:
-enviarScript(`Cole a mensagem aqui`).then(e => console.log("✅ Mensagens enviadas!")).catch(console.error);
+enviarScript(`Cole a mensagem aqui`).then((n) => console.log(`✅ ${n} mensagens enviadas`)).catch(console.error);
 ```
