@@ -1,46 +1,43 @@
+// Motor do SendScript (atualizado em 11/2026 para o WhatsApp Web atual).
+// Uso: abra uma conversa no WhatsApp Web, cole o arquivo inteiro no console e aperte Enter.
+// Para parar no meio: digite  pararScript = true  no console e aperte Enter.
 async function enviarScript(scriptText) {
-  const lines = scriptText.split(/[\n\t]+/).map(line => line.trim()).filter(line => line);
-  
+  const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+  const linhas = scriptText.split(/[\n\t]+/).map((l) => l.trim()).filter(Boolean);
   const main = document.querySelector("#main");
-  const textarea = main?.querySelector('div[contenteditable="true"]');
-  
-  if (!textarea) throw new Error("Não há uma conversa aberta");
+  // a caixa de mensagem fica no rodape da conversa; o seletor amplo cobre versoes antigas
+  const caixa = main?.querySelector('footer div[contenteditable="true"]') || main?.querySelector('div[contenteditable="true"]');
+  if (!caixa) throw new Error("Abra uma conversa no WhatsApp Web antes de rodar o script.");
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    console.log(`Enviando: ${line}`);
+  // o WhatsApp troca o nome do botao de enviar de tempos em tempos: tenta todos os conhecidos
+  const botaoEnviar = () =>
+    main.querySelector('button[aria-label="Enviar"], button[aria-label="Send"]') ||
+    ['wds-ic-send-filled', 'send'].map((i) => main.querySelector(`span[data-icon="${i}"]`)?.closest("button, [role=button]")).find(Boolean) ||
+    main.querySelector('[data-testid="send"]');
 
-    // Foca e insere o texto
-    textarea.focus();
-    document.execCommand('insertText', false, line);
+  window.pararScript = false;
+  let enviadas = 0;
+  for (const linha of linhas) {
+    if (window.pararScript) { console.warn(`Parado pelo usuario apos ${enviadas} mensagens.`); break; }
+    caixa.focus();
+    // colar funciona no editor novo do WhatsApp; insertText cobre o antigo
+    const dados = new DataTransfer();
+    dados.setData("text/plain", linha);
+    caixa.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dados, bubbles: true, cancelable: true }));
+    if (!caixa.textContent.trim()) document.execCommand("insertText", false, linha);
+    await espera(150);
 
-    // Aguarda um momento para o botão de envio aparecer
-    await new Promise(resolve => setTimeout(resolve, 300));
+    const botao = botaoEnviar();
+    if (botao) botao.click();
+    else caixa.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true }));
 
-    // Tenta clicar no botão de envio
-    const sendBtn = main.querySelector('[data-testid="send"]') || main.querySelector('[data-icon="send"]');
-    
-    if (sendBtn) {
-      sendBtn.click();
-    } else {
-      // Fallback: simula o Enter no textarea
-      textarea.dispatchEvent(new KeyboardEvent('keydown', {
-        key: 'Enter',
-        code: 'Enter',
-        keyCode: 13,
-        which: 13,
-        bubbles: true,
-        cancelable: true,
-      }));
-    }
-
-    // Intervalo entre mensagens
-    if (i < lines.length - 1) {
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
+    // espera a caixa esvaziar (mensagem enviada) antes da proxima, ate 3 s
+    for (let t = 0; t < 30 && caixa.textContent.trim(); t++) await espera(100);
+    if (caixa.textContent.trim()) throw new Error(`Nao consegui enviar: "${linha.slice(0, 40)}". O WhatsApp mudou de novo? Abra uma issue.`);
+    enviadas++;
+    await espera(250);
   }
-
-  return lines.length;
+  return enviadas;
 }
 
 enviarScript(`
